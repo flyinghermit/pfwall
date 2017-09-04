@@ -1,7 +1,7 @@
 
 # proxy firewall
-A proxy based firewall system. built as part of course work.
-
+netfilter firewall with http proxy. can be used as combined firewall to manage layer 3 and layer 7 packets. filtering based on four tuple array of port and ip address. have dynamic IP of target or want to block specific domain? use proxy server to filter domain names. built as part of course work. 
+ 
 ### NOTE
 *Please check kernel header syscall.32 and syscall.64 before installing this program. they must me somewhere inside linux header/arch/syscall. 
 they are required to build every kernel module. It must be there by default but most of the time you have to install it there
