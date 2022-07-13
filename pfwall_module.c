@@ -7,6 +7,7 @@ Main kernel module core working is defined here
 #define PF_KERNELSPACE
 
 #include "pfwall_module.h"
+#include <linux/version.h>
 
 // Rules linked list
 static LIST_HEAD(rules_list);
@@ -16,19 +17,17 @@ static struct nf_hook_ops nfhi;
 static struct nf_hook_ops nfho;
 
 // Incoming traffic hook.
-unsigned int pfwall_hook_in(unsigned int hooknum, struct sk_buff *skb,
-			     const struct net_device *in,
-			     const struct net_device *out,
-			     int (*okfn)(struct sk_buff*))
+unsigned int pfwall_hook_in(void *priv_unused,
+			    struct sk_buff *skb,
+			    const struct nf_hook_state *state_unused)
 {
 	return packet_handle(skb, DIRECTION_IN);
 }
 
 // Outgoing traffic hook.
-unsigned int pfwall_hook_out(unsigned int hooknum, struct sk_buff *skb,
-			      const struct net_device *in,
-			      const struct net_device *out,
-			      int (*okfn)(struct sk_buff*))
+unsigned int pfwall_hook_out(void *priv_unused,
+			     struct sk_buff *skb,
+			     const struct nf_hook_state *state_unused)
 {
 	return packet_handle(skb, DIRECTION_OUT);
 }
@@ -374,6 +373,9 @@ int sysfs_init(void)
 // Initialize module
 int pfwall_init(void)
 {
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4,13,0)
+	struct net *n;
+#endif
 	printk("Pfwall: module inserted.\n");
 
 	//Register Netfilter hooks.
@@ -382,14 +384,22 @@ int pfwall_init(void)
 	nfhi.hooknum = NF_INET_PRE_ROUTING;
 	nfhi.pf = PF_INET;
 	nfhi.priority = NF_IP_PRI_FIRST;
-	nf_register_hook(&nfhi);
 
 	// Outgoing
 	nfho.hook = pfwall_hook_out;
 	nfho.hooknum = NF_INET_POST_ROUTING;
 	nfho.pf = PF_INET;
 	nfho.priority = NF_IP_PRI_FIRST;
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4,13,0)
+	for_each_net(n)
+		nf_register_net_hook(n, &nfhi);
+	for_each_net(n)
+		nf_register_net_hook(n, &nfho);
+#else
+	nf_register_hook(&nfhi);
 	nf_register_hook(&nfho);
+#endif
 
 	// Create sysfs class
 	return sysfs_init();
@@ -399,8 +409,16 @@ int pfwall_init(void)
 void pfwall_exit(void)
 {
 	// Unregister Netfilter hooks.
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4,13,0)
+	struct net *n;
+	for_each_net(n)
+		nf_unregister_net_hook(n, &nfhi);
+	for_each_net(n)
+		nf_unregister_net_hook(n, &nfho);
+#else
 	nf_unregister_hook(&nfhi);
 	nf_unregister_hook(&nfho);
+#endif
 
 	// Destroy sysfs class
 	class_destroy(PF_class);
